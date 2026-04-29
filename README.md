@@ -55,11 +55,14 @@ AI 爆款文章创作器是一个基于 **Spring AI Alibaba** 构建的智能图
 | 方式          | 说明           | 数据来源         | 权限   |
 | ----------- | ------------ | ------------ | ---- |
 | Pexels      | 高质量图库检索      | 关键词检索        | 全部用户 |
+| Unsplash    | 高质量图库检索      | 关键词检索        | 全部用户 |
+| DashScope   | 通义万相 AI 生图   | AI Prompt 生成 | VIP  |
+| HuggingFace | FLUX.1 AI 生图 | AI Prompt 生成 | VIP  |
+| Nano Banana | Gemini AI 生图 | AI Prompt 生成 | VIP  |
 | Mermaid     | 流程图/架构图生成    | AI Prompt 生成 | 全部用户 |
 | Iconify     | 图标库检索        | 关键词检索        | 全部用户 |
-| 表情包         | Bing 图片搜索    | 关键词检索        | 全部用户 |
-| Nano Banana | Gemini AI 生图 | AI Prompt 生成 | VIP  |
 | SVG Diagram | AI 概念示意图     | AI Prompt 生成 | VIP  |
+| 表情包         | Bing 图片搜索    | 关键词检索        | 全部用户 |
 | Picsum      | 随机图片         | 降级方案         | 自动触发 |
 
 > 当主配图方式失败时，系统会自动降级到 Picsum 随机图片，确保文章生成不中断。
@@ -95,6 +98,9 @@ AI 爆款文章创作器是一个基于 **Spring AI Alibaba** 构建的智能图
 - ✅ VIP 会员体系（Stripe 支付）
 - ✅ 智能体执行日志追踪（AOP 自动记录）
 - ✅ 管理后台统计分析
+- ✅ 文章断点续写（支持中断后恢复创作）
+- ✅ 图片质量评分与智能筛选
+- ✅ 聚合图片搜索（多源整合）
 
 ## 🛠 技术栈
 
@@ -324,15 +330,21 @@ local:
 │   ├── service/                     # 业务服务
 │   │   ├── impl/                    # 服务实现
 │   │   ├── ArticleAgentService.java # 智能体编排
+│   │   ├── ArticleResumeService.java # 文章断点续写
+│   │   ├── ArticleStateManager.java # 文章状态管理
 │   │   ├── ImageServiceStrategy.java# 配图策略选择器
 │   │   ├── LocalImageStorageService.java # 本地图片存储
 │   │   ├── PexelsService.java       # Pexels 图库
-│   │   ├── HuggingFaceImageService.java  # Hugging Face AI 生图
+│   │   ├── UnsplashService.java     # Unsplash 图库
+│   │   ├── DashScopeImageService.java  # 通义万相 AI 生图
+│   │   ├── HuggingFaceService.java  # Hugging Face AI 生图
 │   │   ├── NanoBananaService.java   # Gemini AI 生图
 │   │   ├── MermaidService.java      # Mermaid 流程图
 │   │   ├── IconifyService.java      # Iconify 图标
 │   │   ├── EmojiPackService.java    # 表情包搜索
-│   │   └── SvgDiagramService.java   # SVG 示意图
+│   │   ├── SvgDiagramService.java   # SVG 示意图
+│   │   ├── AggregatedImageSearchService.java # 聚合图片搜索
+│   │   └── ImageQualityScorer.java  # 图片质量评分
 │   └── utils/                       # 工具类
 ├── frontend/                        # 前端项目
 │   ├── src/
@@ -377,6 +389,7 @@ enabledImageMethods  -- 允许的配图方式（JSON 数组）
 | ----------- | ------------------------------------ | -------------------- | -- |
 | 通义千问        | <https://bailian.console.aliyun.com> | DashScope API        | ✅  |
 | Pexels      | <https://www.pexels.com/api/>        | 图片搜索                 | ✅  |
+| Unsplash    | <https://unsplash.com/developers>    | 图片搜索                 | -  |
 | Hugging Face | <https://huggingface.co/settings/tokens> | FLUX.1 AI 生图     | -  |
 | Stripe      | <https://dashboard.stripe.com>       | 支付功能                 | -  |
 | Nano Banana | <https://aistudio.google.com/apikey> | Gemini AI 生图         | -  |
@@ -410,16 +423,20 @@ StateGraph graph = new StateGraph(keyStrategyFactory)
 
 ### 配图策略模式
 
-支持 6 种配图方式，通过策略模式实现灵活扩展：
+支持 10 种配图方式，通过策略模式实现灵活扩展：
 
 ```java
 public enum ImageMethodEnum {
+    AGGREGATED("AGGREGATED", "聚合搜索", false, false),
     PEXELS("PEXELS", "Pexels 图库", false, false),
-    NANO_BANANA("NANO_BANANA", "AI 生图", true, false),
+    UNSPLASH("UNSPLASH", "Unsplash 图库", false, false),
+    DASHSCOPE("DASHSCOPE", "通义万相 AI 生图", true, false),
+    HUGGINGFACE("HUGGINGFACE", "FLUX.1 AI 生图", true, false),
+    NANO_BANANA("NANO_BANANA", "Gemini AI 生图", true, false),
     MERMAID("MERMAID", "流程图", true, false),
     ICONIFY("ICONIFY", "图标库", false, false),
-    EMOJI_PACK("EMOJI_PACK", "表情包", false, false),
-    SVG_DIAGRAM("SVG_DIAGRAM", "示意图", true, false);
+    SVG_DIAGRAM("SVG_DIAGRAM", "示意图", true, false),
+    EMOJI_PACK("EMOJI_PACK", "表情包", false, false);
 }
 ```
 
